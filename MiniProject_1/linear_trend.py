@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import linregress, t
 
-filename = "berkeley_data.csv"
+filename = "data/berkeley_data.csv"
 
 # ------------------------------------------------------------
 # Read the file and separate its two datasets.

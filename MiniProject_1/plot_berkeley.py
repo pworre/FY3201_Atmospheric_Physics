@@ -17,7 +17,7 @@ import matplotlib.dates as mdates
 #   3 = quoted uncertainty (95% confidence interval half-width)
 # ------------------------------------------------------------
 
-filename = "berkeley_data.csv"
+filename = "data/berkeley_data.csv"
 
 # Read whitespace-separated data (the file has no usable CSV header).
 raw = pd.read_csv(
@@ -130,5 +130,5 @@ fig.tight_layout(rect=[0, 0.08, 1, 1])
 plt.show()
 
 # Optional: save a publication-quality image.
-# fig.savefig("berkeley_global_land_ocean_anomaly.png",
-#             dpi=300, bbox_inches="tight")
+fig.savefig("berkeley_global_land_ocean_anomaly.png",
+             dpi=300, bbox_inches="tight")

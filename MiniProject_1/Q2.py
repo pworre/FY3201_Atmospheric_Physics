@@ -1,8 +1,8 @@
 #ACCELERATION_TREND QUESTION
-
 import io
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 from scipy.stats import linregress, t
 
 filename = "data/berkeley_data.csv"
@@ -75,6 +75,11 @@ def fit_linear(annual_data, start_year, end_year):
         "trend_C_per_decade": result.slope * 10.0,
         "se_C_per_decade": result.stderr * 10.0,
         "p_value": result.pvalue,
+        # Kept for plotting the fitted line later.
+        "slope_C_per_year": result.slope,
+        "intercept": result.intercept,
+        "x_min": x.min(),
+        "x_max": x.max(),
     }
 
 
@@ -143,6 +148,10 @@ def fit_quadratic(annual_data, start_year=None, end_year=None):
         "accel_se": accel_se,
         "accel_ci95": ci95,
         "midpoint_year": x0,
+        # Kept for plotting the fitted curve later.
+        "a": a, "b": b, "c": c,
+        "x_min": x_raw.min(),
+        "x_max": x_raw.max(),
     }
 
 
@@ -159,3 +168,87 @@ if quad_full["accel_C_per_decade2"] > 0:
     print("-> positive curvature: warming rate itself is increasing over time")
 else:
     print("-> negative curvature: warming rate itself is decreasing over time")
+
+# ------------------------------------------------------------
+# Plot 1: split-window trend comparison, zoomed into 1970-2024
+# so the two fitted lines and their divergence (or lack of it)
+# are actually visible.
+# ------------------------------------------------------------
+fig1, ax1 = plt.subplots(figsize=(11, 6))
+
+recent = annual[annual["year"] >= 1970]
+ax1.scatter(
+    recent["year"], recent["anomaly"],
+    s=16, color="grey", alpha=0.6, label="Annual mean anomaly"
+)
+
+for r, color in ((early, "tab:blue"), (late, "tab:red")):
+    x_line = np.array([r["x_min"], r["x_max"]])
+    y_line = r["intercept"] + r["slope_C_per_year"] * x_line
+    ax1.plot(
+        x_line, y_line, color=color, linewidth=2.5,
+        label=f"{r['period']}: {r['trend_C_per_decade']:.3f}"
+              f" ± {r['se_C_per_decade']:.3f} °C/decade"
+    )
+
+ax1.axhline(0, color="black", linewidth=0.6, alpha=0.5)
+ax1.set_title("Split-Window Linear Trends: 1970-1997 vs. 1998-2024",
+              fontsize=14, pad=12)
+ax1.set_xlabel("Year", fontsize=12)
+ax1.set_ylabel("Temperature anomaly (°C)", fontsize=12)
+ax1.grid(True, alpha=0.25)
+ax1.legend(frameon=False, loc="upper left", fontsize=10)
+
+caption1 = (
+    f"Annual mean global land/ocean temperature anomalies from 1970-2024 "
+    f"(grey points), with linear trends fitted separately to 1970-1997 (blue) "
+    f"and 1998-2024 (red). The two slopes differ by "
+    f"{slope_diff:.3f} ± {slope_diff_se:.3f} °C/decade (z = {z:.2f})."
+)
+fig1.text(0.5, 0.01, caption1, ha="center", va="bottom", fontsize=9, wrap=True)
+fig1.tight_layout(rect=[0, 0.1, 1, 1])
+fig1.savefig("q2_split_window_trends.png", dpi=300, bbox_inches="tight")
+
+# ------------------------------------------------------------
+# Plot 2: quadratic fit over the full 1850-2024 record, to show
+# long-term curvature in the warming rate.
+# ------------------------------------------------------------
+fig2, ax2 = plt.subplots(figsize=(11, 6))
+
+ax2.scatter(
+    annual["year"], annual["anomaly"],
+    s=14, color="grey", alpha=0.5, label="Annual mean anomaly"
+)
+
+x_full = np.linspace(quad_full["x_min"], quad_full["x_max"], 300)
+x_centered = x_full - quad_full["midpoint_year"]
+y_quad = (
+    quad_full["a"]
+    + quad_full["b"] * x_centered
+    + quad_full["c"] * x_centered**2
+)
+ax2.plot(
+    x_full, y_quad, color="black", linewidth=2.5,
+    label=f"Quadratic fit: accel = {quad_full['accel_C_per_decade2']:.4f}"
+          f" ± {quad_full['accel_se']:.4f} °C/decade²"
+)
+
+ax2.axhline(0, color="black", linewidth=0.6, alpha=0.5)
+ax2.set_title("Quadratic Fit to the Full Temperature Record (1850-2024)",
+              fontsize=14, pad=12)
+ax2.set_xlabel("Year", fontsize=12)
+ax2.set_ylabel("Temperature anomaly (°C)", fontsize=12)
+ax2.grid(True, alpha=0.25)
+ax2.legend(frameon=False, loc="upper left", fontsize=10)
+
+caption2 = (
+    "Annual mean global land/ocean temperature anomalies, 1850-2024 (grey "
+    "points), with a quadratic curve fitted to the full record (black). "
+    "The positive acceleration term indicates the warming rate itself has "
+    "increased over the course of the record."
+)
+fig2.text(0.5, 0.01, caption2, ha="center", va="bottom", fontsize=9, wrap=True)
+fig2.tight_layout(rect=[0, 0.1, 1, 1])
+fig2.savefig("q2_quadratic_fit.png", dpi=300, bbox_inches="tight")
+
+plt.show()

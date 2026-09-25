@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 # Settings
 # ------------------------------------------------------------
 client_id = 'fdd19ec9-0bd3-4c3f-a42a-d808b1597901'
-STATION = "SN55700"  # Florida, Bergen
+STATION = "SN50540"  # Florida, Bergen
 START_YEAR = 1991
 END_YEAR = 2025
 url = "https://frost.met.no/observations/v0.jsonld"
@@ -114,4 +114,43 @@ ax.legend()
 ax.grid(alpha=0.25)
 fig.tight_layout()
 fig.savefig("task3a_pressure_trend.png", dpi=300)
+plt.show()
+
+# ------------------------------------------------------------
+# Figure 3: daily pressure through January, 2025 vs. the
+# 1991-2024 normal
+# ------------------------------------------------------------
+df["month"] = df.index.month
+df["day"] = df.index.day
+
+jan_normal = df[(df["month"] == 1) & (df["year"] < 2025)]
+jan_2025 = df[(df["month"] == 1) & (df["year"] == 2025)]
+
+jan_mean = np.zeros(31)
+jan_min = np.zeros(31)
+jan_max = np.zeros(31)
+jan_days = np.zeros(31)
+
+for d in range(1, 32):
+    vals = jan_normal[jan_normal["day"] == d]["pressure"]
+    jan_mean[d - 1] = np.mean(vals)
+    jan_min[d - 1] = np.min(vals)
+    jan_max[d - 1] = np.max(vals)
+    jan_days[d - 1] = d
+
+fig, ax = plt.subplots(figsize=(12, 6))
+
+ax.fill_between(jan_days, jan_min, jan_max, color="steelblue", alpha=0.15, label="Range 1991\u20132024")
+ax.plot(jan_days, jan_mean, color="steelblue", linewidth=1.5, label="Mean 1991\u20132024")
+
+ax.plot(jan_2025["day"], jan_2025["pressure"], color="firebrick", marker="o", markersize=4, linewidth=1.5, label="2025")
+
+ax.set_xlabel("Day of January")
+ax.set_ylabel("Mean sea level pressure [hPa]")
+ax.set_xlim(1, 31)
+ax.set_title(f"({STATION}) daily mean pressure in January, 2025 vs. 1991\u20132024 normal")
+ax.legend()
+ax.grid(alpha=0.25)
+fig.tight_layout()
+fig.savefig("task3a_january_2025.png", dpi=300)
 plt.show()

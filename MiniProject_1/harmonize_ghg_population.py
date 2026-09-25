@@ -19,9 +19,11 @@ This script:
   1. Loads the CO2 and CH4 series (already annual).
   2. Streams the (potentially huge) population file in chunks, filters
      to one Location/Variant, and sums PopTotal per year -> one row/year.
-  3. Restricts all series to the period covered by ALL of them (the
+  3. Converts the monthly 12-month temperature moving average to annual
+      means.
+  4. Restricts all series to the period covered by ALL of them (the
      "common period") and joins them into a single harmonized table.
-  4. Computes Pearson and Spearman correlation coefficients (with
+  5. Computes Pearson and Spearman correlation coefficients (with
      p-values) between every pair of harmonized series.
 
 Usage
@@ -104,6 +106,26 @@ def load_population_annual_total(
     return pop.to_frame()
 
 
+def load_temperature_annual_mean(path: str) -> pd.DataFrame:
+    """Convert the monthly 12-month moving average to annual means.
+
+    The input is exported by plot_berkeley.py with columns ``date`` and
+    ``moving_average``. Rows at the ends of the record are absent because a
+    centred 12-month window cannot be calculated there.
+    """
+    df = pd.read_csv(path, parse_dates=["date"])
+    df = df.dropna(subset=["date", "moving_average"]).copy()
+    df["year"] = df["date"].dt.year
+    annual = (
+        df.groupby("year")["moving_average"]
+        .mean()
+        .rename("temperature_C")
+        .to_frame()
+    )
+    annual.index.name = "year"
+    return annual
+
+
 # ---------------------------------------------------------------------
 # Harmonization
 # ---------------------------------------------------------------------
@@ -161,6 +183,11 @@ def main():
     parser.add_argument("--co2", default="data/co2_annmean_gl.csv", help="Path to co2_annmean_gl.csv")
     parser.add_argument("--ch4", default="data/ch4_annmean_gl.csv", help="Path to ch4_annmean_gl.csv")
     parser.add_argument(
+        "--temperature",
+        default="data/berkeley_12_month_moving_average.csv",
+        help="Path to the Berkeley 12-month moving-average CSV.",
+    )
+    parser.add_argument(
         "--population",
         default="data/WPP2024_PopulationExposureBySingleAgeSex_Medium_1950-2023.csv",
         help="Path to the UN WPP population-by-age CSV (optional; large file, read in chunks).",
@@ -174,6 +201,12 @@ def main():
         load_noaa_annual_mean(args.co2, "co2_ppm"),
         load_noaa_annual_mean(args.ch4, "ch4_ppb"),
     ]
+
+    temperature_path = Path(args.temperature)
+    if temperature_path.exists():
+        frames.append(load_temperature_annual_mean(temperature_path))
+    else:
+        print(f"Note: temperature file '{temperature_path}' not found - continuing without temperature.")
 
     if args.population:
         pop_path = Path(args.population)

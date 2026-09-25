@@ -55,6 +55,13 @@ df["moving_average"] = (
     .mean()
 )
 
+# Save the valid centred 12-month moving-average values for reuse.
+moving_average = df[["date", "moving_average"]].dropna()
+moving_average.to_csv(
+    "data/berkeley_12_month_moving_average.csv",
+    index=False
+)
+
 # ------------------------------------------------------------
 # Plot
 # ------------------------------------------------------------

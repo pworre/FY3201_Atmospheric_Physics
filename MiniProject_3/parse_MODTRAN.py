@@ -4,8 +4,11 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
-
-
+from solar_spectrum import (
+    planck_irradiance_at_earth,
+    SOLAR_RADIUS_M,
+    ASTRONOMICAL_UNIT_M,
+)
 
 def is_header_line(line: str) -> bool:
     return "RADIANCE(WATTS/CM2-STER" in line
@@ -60,24 +63,58 @@ def read_file(spath):
 
 
 # Change this to your path
-src_path = Path("C:\\...your location...\\raw_out_10_km.txt")
+src_path = Path(__file__).parent / "part2" / "raw_out_0_km.txt"
+df_0=read_file(src_path)
+
+src_path = Path(__file__).parent / "part2" / "raw_out_10_km.txt"
 df_10=read_file(src_path)
 
-src_path = Path("C:\\...your location...\\raw_out_50_km.txt")
+src_path = Path(__file__).parent / "part2" / "raw_out_25_km.txt"
+df_25=read_file(src_path)
+
+src_path = Path(__file__).parent / "part2" / "raw_out_50_km.txt"
 df_50=read_file(src_path)
 
-src_path = Path("C:\\...your location...\\raw_out_100_km.txt")
+src_path = Path(__file__).parent / "part2" / "raw_out_100_km.txt"
 df_100=read_file(src_path)
 
+# Adding blackbody curves
+def planck_radiance_per_nm(wavelength_nm, temperature_k):
+    # Undo the solar-disk scaling in planck_irradiance_at_earth,
+    # then convert from W m^-2 to W cm^-2.
+    solar_dilution = (SOLAR_RADIUS_M / ASTRONOMICAL_UNIT_M) ** 2
+    irradiance = planck_irradiance_at_earth(wavelength_nm, temperature_k)
+    return irradiance / (np.pi * solar_dilution) * 1e-4
 
-plt.figure(figsize=(6.3, 4.0))  # ~16 cm x 10 cm
-plt.plot(df_10["wav_um"].values, df_10["total_um"].values,label="10km")
-plt.plot(df_50["wav_um"].values, df_50["total_um"].values,label="50km")
-plt.plot(df_100["wav_um"].values, df_100["total_um"].values,label="100km")
-plt.xlabel("Wavelength (µm)")
-plt.ylabel("Spectral radiance (W cm$^{-2}$ sr$^{-1}$ µm$^{-1}$)")
-plt.title("MODTRAN total radiance vs wavelength")
-plt.tight_layout()
-plt.xlim([5,30])
-plt.legend()
+
+#plt.figure(figsize=(6.3, 4.0))  # ~16 cm x 10 cm
+fig, ax = plt.subplots(figsize=(6.3, 4.0))
+
+for df, label in [
+    (df_0, "0 km"),
+    (df_10, "10 km"),
+    (df_25, "25 km"),
+    (df_50, "50 km"),
+    (df_100, "100 km"),
+]:
+    wavelength_nm = df["wav_um"].to_numpy() * 1000
+    radiance_per_nm = df["total_um"].to_numpy() / 1000
+    ax.plot(wavelength_nm, radiance_per_nm, label=label)
+
+wavelength_nm = df_0["wav_um"].to_numpy() * 1000
+for temperature_k in [220, 240, 260, 280, 300]:
+    ax.plot(
+        wavelength_nm,
+        planck_radiance_per_nm(wavelength_nm, temperature_k),
+        "--",
+        label=f"{temperature_k} K",
+    )
+
+ax.set_xlabel("Wavelength (nm)")
+ax.set_ylabel("Spectral radiance (W cm$^{-2}$ sr$^{-1}$ nm$^{-1}$)")
+ax.set_title("MODTRAN total radiance vs wavelength")
+ax.set_xlim(5000, 30000)  # Same range as 5–30 µm
+ax.grid(True, alpha=0.3)
+ax.legend()
+fig.tight_layout()
 plt.show()

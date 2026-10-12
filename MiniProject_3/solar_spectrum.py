@@ -9,9 +9,12 @@ PLOT_PATH = Path(__file__).with_name("kurucz_spectrum_blackbody.png")
 SOLAR_TEMPERATURE_K = 5778.0
 SOLAR_RADIUS_M = 6.957e8
 ASTRONOMICAL_UNIT_M = 1.495978707e11
+SMOOTHING_WINDOW_SAMPLES = 500
 
 
-def planck_irradiance_at_earth(wavelength_nm: np.ndarray) -> np.ndarray:
+def planck_irradiance_at_earth(
+    wavelength_nm: np.ndarray, solar_temperature_k: float
+) -> np.ndarray:
     """Return the solar blackbody spectrum at 1 AU in W m^-2 nm^-1."""
     planck_constant = 6.62607015e-34
     speed_of_light = 299792458.0
@@ -21,7 +24,7 @@ def planck_irradiance_at_earth(wavelength_nm: np.ndarray) -> np.ndarray:
     exponent = (
         planck_constant
         * speed_of_light
-        / (wavelength_m * boltzmann_constant * SOLAR_TEMPERATURE_K)
+        / (wavelength_m * boltzmann_constant * solar_temperature_k)
     )
     spectral_radiance_per_m = (
         2
@@ -34,13 +37,28 @@ def planck_irradiance_at_earth(wavelength_nm: np.ndarray) -> np.ndarray:
     return np.pi * spectral_radiance_per_m * dilution * 1e-9
 
 
+def smooth_spectrum(
+    irradiance: np.ndarray,
+    window_samples: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return centered moving means and standard deviations."""
+    left_padding = (window_samples - 1) // 2
+    right_padding = window_samples // 2
+    padded = np.pad(irradiance, (left_padding, right_padding), mode="edge")
+    windows = np.lib.stride_tricks.sliding_window_view(padded, window_samples)
+    return windows.mean(axis=1), windows.std(axis=1)
+
+
 def main() -> None:
     # The data-file header specifies mW / (m^2 nm); convert to W / (m^2 nm).
     wavelength_nm, irradiance_mw_m2_nm = np.loadtxt(
         DATA_PATH, comments="#", unpack=True
     )
     irradiance_w_m2_nm = irradiance_mw_m2_nm * 1e-3
-    blackbody_w_m2_nm = planck_irradiance_at_earth(wavelength_nm)
+    blackbody_w_m2_nm = planck_irradiance_at_earth(wavelength_nm, SOLAR_TEMPERATURE_K)
+    mean_irradiance, std_irradiance = smooth_spectrum(
+        irradiance_w_m2_nm, SMOOTHING_WINDOW_SAMPLES
+    )
 
     measured_integral = np.trapezoid(irradiance_w_m2_nm, wavelength_nm)
     blackbody_integral = np.trapezoid(blackbody_w_m2_nm, wavelength_nm)
@@ -51,21 +69,28 @@ def main() -> None:
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.plot(
         wavelength_nm,
-        irradiance_w_m2_nm,
+        mean_irradiance,
         color="tab:blue",
-        linewidth=0.8,
-        label="Kurucz solar spectrum",
+        linewidth=1.2,
+        label=f"Kurucz spectrum: {SMOOTHING_WINDOW_SAMPLES}-sample moving mean",
+    )
+    ax.fill_between(
+        wavelength_nm,
+        mean_irradiance - std_irradiance,
+        mean_irradiance + std_irradiance,
+        color="tab:blue",
+        alpha=0.35,
+        linewidth=0,
+        label=f"Local mean ±1 SD",
     )
     ax.plot(
         wavelength_nm,
         blackbody_w_m2_nm,
         color="black",
         linewidth=2,
-        label=f"5778 K blackbody scaled to 1 AU "
-        f"({blackbody_integral:.1f} W m$^{{-2}}$ over range)",
+        label=f"5778 K blackbody",
     )
-    ax.set_xscale("log")
-    ax.set_xlim(wavelength_nm.min(), wavelength_nm.max())
+    ax.set_xlim(wavelength_nm.min(), 3000)
     ax.set_xlabel("Wavelength (nm)")
     ax.set_ylabel("Spectral irradiance (W m$^{-2}$ nm$^{-1}$)")
     ax.set_title("Solar spectral irradiance and 5778 K blackbody")
@@ -79,6 +104,11 @@ def main() -> None:
     print(
         f"Wavelength coverage: {wavelength_nm.min():.1f}-"
         f"{wavelength_nm.max():.1f} nm ({wavelength_nm.size} samples)"
+    )
+    print(
+        f"Plot smoothing: centered moving average over "
+        f"{SMOOTHING_WINDOW_SAMPLES} samples "
+        f"(about {np.median(np.diff(wavelength_nm)) * SMOOTHING_WINDOW_SAMPLES:.1f} nm)"
     )
     print(
         f"Integrated measured irradiance over this range: "
